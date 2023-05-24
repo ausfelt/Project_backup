@@ -1,8 +1,8 @@
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLabel, QTextEdit, QHBoxLayout, QSpacerItem, QSizePolicy, QGraphicsDropShadowEffect
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLabel, QTextEdit, QHBoxLayout, QSpacerItem, QSizePolicy, QGraphicsDropShadowEffect, QMessageBox
 from PyQt5.QtGui import QFont, QPainter, QBrush, QImage, QPalette, QColor
 from PyQt5.QtCore import Qt, QTimer
 import json
-
+import sys
 
 # Load room data from JSON file
 with open('rooms.json') as f:
@@ -57,12 +57,28 @@ class MainWindow(QWidget):
         self.layout.addLayout(self.health_layout)
         self.setLayout(self.layout)
 
-        self.buttons = []
+        self.start_button = QPushButton("Start")
+        self.start_button.setFont(QFont('Arial', 28, QFont.Bold))
+        self.start_button.setStyleSheet("background-color: black; color: pink; border-style: outset; border-width: 2px; border-radius: 10px; border-color: beige;")
+        self.start_button.clicked.connect(self.start_game)
 
-        self.update_room()
+        self.start_layout = QVBoxLayout()
+        self.start_layout.addItem(QSpacerItem(40, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
+        self.start_layout.addWidget(self.start_button, alignment=Qt.AlignCenter)
+        self.start_layout.addItem(QSpacerItem(40, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
+
+        self.layout.addLayout(self.start_layout)
+
+        self.buttons = []
 
         # Resize the window
         self.resize(1024, 768)
+
+    def start_game(self):
+        self.layout.removeItem(self.start_layout)
+        self.start_button.deleteLater()
+        self.start_button = None
+        self.update_room()
 
     def update_room(self):
         room = rooms[state['current_room']]
@@ -82,14 +98,17 @@ class MainWindow(QWidget):
             self.layout.addWidget(button)
             self.buttons.append(button)
 
+        if state['current_room'] == 'end':
+            self.show_end_message()
+
     def update_health_bar(self):
         current_hp = state['hp']
         if current_hp >= 101:
             health_color = QColor(Qt.green)
-        elif current_hp <= 99:
-            health_color = QColor(Qt.red)
-        else:
+        elif current_hp == 100:
             health_color = QColor(Qt.blue)
+        else:
+            health_color = QColor(Qt.red)
 
         # Change the HP bar text to white
         self.health_value.setStyleSheet("color: white")
@@ -97,10 +116,15 @@ class MainWindow(QWidget):
         self.health_bar.setText("")
         self.health_bar.setStyleSheet(f"background-color: {health_color.name()}")
 
+        if current_hp <= 0:
+            self.show_end_message()
+
     def choose_option(self, option):
         _, next_room, hp_delta = option
         state['current_room'] = next_room
         state['hp'] += hp_delta
+        if state['hp'] <= 0:
+            state['hp'] = 0
         self.update_room()
         message = ""
         if hp_delta < 0:
@@ -112,13 +136,36 @@ class MainWindow(QWidget):
         self.text.append(message)
         QTimer.singleShot(3000, lambda: self.remove_text(message))  # Message will be removed after 3 seconds
 
+        sender = self.sender()
+        sender.setCursor(Qt.ArrowCursor)
+
     def remove_text(self, message):
         current_text = self.text.toPlainText()
         self.text.setPlainText(current_text.replace(message, ''))
+
+    def show_end_message(self):
+        if state['hp'] <= 0:
+            message_box = QMessageBox()
+            message_box.setWindowTitle("Game Over")
+            message_box.setText("YOU DIED")
+            message_box.setStyleSheet("QMessageBox { background-color: red; } QMessageBox QLabel { color: white; } QMessageBox QPushButton { background-color: black; color: pink; border-style: outset; border-width: 2px; border-radius: 10px; border-color: beige; }")
+        else:
+            message_box = QMessageBox()
+            message_box.setWindowTitle("Congratulations!")
+            message_box.setText("You have won, but at what cost...")
+            message_box.setStyleSheet("QMessageBox { background-color: green; } QMessageBox QLabel { color: white; } QMessageBox QPushButton { background-color: black; color: pink; border-style: outset; border-width: 2px; border-radius: 10px; border-color: beige; }")
+
+        message_box.setStandardButtons(QMessageBox.Ok)
+        message_box.buttonClicked.connect(self.handle_end_message)
+        message_box.exec_()
+
+    def handle_end_message(self, button):
+        if button.text() == "OK":
+            QApplication.quit()
 
 
 if __name__ == '__main__':
     app = QApplication([])
     window = MainWindow()
     window.show()
-    app.exec_()
+    sys.exit(app.exec_())
